@@ -1,4 +1,5 @@
 package com.josejordan.pasos
+
 import android.Manifest
 import android.content.pm.PackageManager
 import android.hardware.Sensor
@@ -8,12 +9,11 @@ import android.hardware.SensorManager
 import android.os.Build
 import android.os.Bundle
 import android.widget.TextView
+import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.google.android.material.snackbar.Snackbar
-import androidx.activity.viewModels
-
 
 class MainActivity : AppCompatActivity(), SensorEventListener {
 
@@ -23,31 +23,16 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private var stepSensor: Sensor? = null
     private lateinit var stepCountTextView: TextView
     private lateinit var distanceTextView: TextView
-    private var stepCount: Int = 0
-    private var distance: Double = 0.0
-    private val activityRecognitionRequestCode = 1
-    private var initialStepCount = -1
     private lateinit var totalStepCountTextView: TextView
     private lateinit var totalDistanceTextView: TextView
-    private var totalStepCount: Int = 0
-    private var totalDistance: Double = 0.0
-    private var previousStepCount = -1
-
-
-    companion object {
-        const val PREFERENCES_FILE = "com.josejordan.pasos.preferences"
-        const val PREF_TOTAL_STEP_COUNT = "total_step_count"
-        const val PREF_STEP_COUNT = "step_count"
-    }
+    private val activityRecognitionRequestCode = 1
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        val sharedPreferences = getSharedPreferences(PREFERENCES_FILE, MODE_PRIVATE)
+        viewModel.init(applicationContext)
 
-        totalStepCount = sharedPreferences.getInt(PREF_TOTAL_STEP_COUNT, 0)
-        stepCount = sharedPreferences.getInt(PREF_STEP_COUNT, 0)
         stepCountTextView = findViewById(R.id.step_count_text_view)
         distanceTextView = findViewById(R.id.distance_text_view)
         totalStepCountTextView = findViewById(R.id.total_step_count_text_view)
@@ -91,27 +76,24 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     override fun onPause() {
         super.onPause()
-        saveStepCount()
         sensorManager.unregisterListener(this)
     }
 
     override fun onSensorChanged(event: SensorEvent?) {
         if (event?.sensor?.type == Sensor.TYPE_STEP_COUNTER) {
-            if (initialStepCount < 0) {
-                initialStepCount = event.values[0].toInt()
+            if (viewModel.initialStepCount < 0) {
+                viewModel.initialStepCount = event.values[0].toInt()
             }
 
-            val currentStepCount = event.values[0].toInt() - initialStepCount
+            val currentStepCount = event.values[0].toInt() - viewModel.initialStepCount
 
-            if (previousStepCount != -1) {
-                val difference = currentStepCount - previousStepCount
-                totalStepCount += difference
-                saveTotalStepCount()
+            if (viewModel.previousStepCount != -1) {
+                val difference = currentStepCount - viewModel.previousStepCount
+                viewModel.totalStepCount += difference
             }
 
-            previousStepCount = currentStepCount
-            stepCount = currentStepCount
-            saveStepCount()
+            viewModel.previousStepCount = currentStepCount
+            viewModel.stepCount = currentStepCount
             updateStepCountDisplay()
         }
     }
@@ -119,32 +101,20 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     }
 
     private fun updateStepCountDisplay() {
-        stepCountTextView.text = getString(R.string.step_count, stepCount)
-        distance = stepsToKilometers(stepCount)
+        stepCountTextView.text = getString(R.string.step_count, viewModel.stepCount)
+
+        val distance = stepsToKilometers(viewModel.stepCount)
         distanceTextView.text = getString(R.string.distance, distance)
-        totalStepCountTextView.text = getString(R.string.total_step_count, totalStepCount)
-        totalDistance = stepsToKilometers(totalStepCount)
+
+        totalStepCountTextView.text = getString(R.string.total_step_count, viewModel.totalStepCount)
+
+        val totalDistance = stepsToKilometers(viewModel.totalStepCount)
         totalDistanceTextView.text = getString(R.string.total_distance, totalDistance)
     }
-    private fun saveTotalStepCount() {
-        val sharedPreferences = getSharedPreferences(PREFERENCES_FILE, MODE_PRIVATE)
-        with(sharedPreferences.edit()) {
-            putInt(PREF_TOTAL_STEP_COUNT, totalStepCount)
-            apply()
-        }
-    }
+
 
     private fun stepsToKilometers(steps: Int): Double {
         val stepsPerKilometer = 1250.0
         return steps / stepsPerKilometer
     }
-
-    private fun saveStepCount() {
-        val sharedPreferences = getSharedPreferences(PREFERENCES_FILE, MODE_PRIVATE)
-        with(sharedPreferences.edit()) {
-            putInt(PREF_STEP_COUNT, stepCount)
-            apply()
-        }
-    }
-
 }
