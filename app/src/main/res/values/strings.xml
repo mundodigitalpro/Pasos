@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">Contador de Pasos</string>
+    <string name="step_count">Pasos actuales: %d</string>
+    <string name="distance">Distancia actual: %.2f km</string>
+    <string name="total_step_count">Pasos totales: %d</string>
+    <string name="total_distance">Distancia total: %.2f km</string>
+</resources>
