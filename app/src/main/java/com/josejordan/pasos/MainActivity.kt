@@ -13,8 +13,8 @@ import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Observer
 import com.google.android.material.snackbar.Snackbar
-
 class MainActivity : AppCompatActivity(), SensorEventListener {
 
     private val viewModel: MyViewModel by viewModels()
@@ -42,26 +42,66 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
         stepSensor = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
+
+        viewModel.stepCount.observe(this, Observer { stepCount ->
+            updateStepCountDisplay(stepCount, viewModel.totalStepCount.value ?: 0)
+        })
+
+        viewModel.totalStepCount.observe(this, Observer { totalStepCount ->
+            updateStepCountDisplay(viewModel.stepCount.value ?: 0, totalStepCount)
+        })
+    }
+
+    private fun updateStepCountDisplay(stepCount: Int, totalStepCount: Int) {
+        stepCountTextView.text = getString(R.string.step_count, stepCount)
+
+        val distance = stepsToKilometers(stepCount)
+        distanceTextView.text = getString(R.string.distance, distance)
+
+        totalStepCountTextView.text = getString(R.string.total_step_count, totalStepCount)
+
+        val totalDistance = stepsToKilometers(totalStepCount)
+        totalDistanceTextView.text = getString(R.string.total_distance, totalDistance)
     }
 
     private fun checkAndRequestPermissions() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACTIVITY_RECOGNITION) != PackageManager.PERMISSION_GRANTED) {
+        if (ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACTIVITY_RECOGNITION
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.ACTIVITY_RECOGNITION), activityRecognitionRequestCode)
+                ActivityCompat.requestPermissions(
+                    this,
+                    arrayOf(Manifest.permission.ACTIVITY_RECOGNITION),
+                    activityRecognitionRequestCode
+                )
             }
         }
     }
 
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         when (requestCode) {
             activityRecognitionRequestCode -> {
                 if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
 
-                    Snackbar.make(findViewById(android.R.id.content), "Permiso de reconocimiento de actividad otorgado", Snackbar.LENGTH_SHORT).show()
+                    Snackbar.make(
+                        findViewById(android.R.id.content),
+                        "Permiso de reconocimiento de actividad otorgado",
+                        Snackbar.LENGTH_SHORT
+                    ).show()
                 } else {
 
-                    Snackbar.make(findViewById(android.R.id.content), "Permiso de reconocimiento de actividad denegado", Snackbar.LENGTH_SHORT).show()
+                    Snackbar.make(
+                        findViewById(android.R.id.content),
+                        "Permiso de reconocimiento de actividad denegado",
+                        Snackbar.LENGTH_SHORT
+                    ).show()
                 }
             }
         }
@@ -89,29 +129,16 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
             if (viewModel.previousStepCount != -1) {
                 val difference = currentStepCount - viewModel.previousStepCount
-                viewModel.totalStepCount += difference
+                viewModel.updateTotalStepCount(viewModel.totalStepCount.value!! + difference)
             }
 
             viewModel.previousStepCount = currentStepCount
-            viewModel.stepCount = currentStepCount
-            updateStepCountDisplay()
+            viewModel.updateStepCount(currentStepCount)
         }
     }
+
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
     }
-
-    private fun updateStepCountDisplay() {
-        stepCountTextView.text = getString(R.string.step_count, viewModel.stepCount)
-
-        val distance = stepsToKilometers(viewModel.stepCount)
-        distanceTextView.text = getString(R.string.distance, distance)
-
-        totalStepCountTextView.text = getString(R.string.total_step_count, viewModel.totalStepCount)
-
-        val totalDistance = stepsToKilometers(viewModel.totalStepCount)
-        totalDistanceTextView.text = getString(R.string.total_distance, totalDistance)
-    }
-
 
     private fun stepsToKilometers(steps: Int): Double {
         val stepsPerKilometer = 1250.0
