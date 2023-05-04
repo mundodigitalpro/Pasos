@@ -8,17 +8,24 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.widget.TextView
-import androidx.activity.viewModels
+
+import androidx.lifecycle.ViewModelProvider
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Observer
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+
 import com.google.android.material.snackbar.Snackbar
+import java.util.concurrent.TimeUnit
 
 class MainActivity : AppCompatActivity(), SensorEventListener {
 
-    private val viewModel: MyViewModel by viewModels()
-
+    //private val viewModel: MyViewModel by viewModels()
+    private lateinit var viewModel: MyViewModel
     private lateinit var sensorManager: SensorManager
     private var stepSensor: Sensor? = null
     private lateinit var stepCountTextView: TextView
@@ -31,7 +38,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        viewModel.init(applicationContext)
+        //viewModel.init(applicationContext)
+
+        val viewModelFactory = MyViewModelFactory(application)
+        viewModel = ViewModelProvider(this, viewModelFactory).get(MyViewModel::class.java)
+
+        observeDailySteps()
 
         stepCountTextView = findViewById(R.id.step_count_text_view)
         distanceTextView = findViewById(R.id.distance_text_view)
@@ -42,8 +54,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
         stepSensor = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
-    }
 
+        //scheduleSaveDailyStepWorker()
+    }
     private fun checkAndRequestPermissions() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACTIVITY_RECOGNITION) != PackageManager.PERMISSION_GRANTED) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -51,7 +64,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             }
         }
     }
-
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         when (requestCode) {
@@ -66,19 +78,16 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             }
         }
     }
-
     override fun onResume() {
         super.onResume()
         stepSensor?.also { sensor ->
             sensorManager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_UI)
         }
     }
-
     override fun onPause() {
         super.onPause()
         sensorManager.unregisterListener(this)
     }
-
     override fun onSensorChanged(event: SensorEvent?) {
         if (event?.sensor?.type == Sensor.TYPE_STEP_COUNTER) {
             if (viewModel.initialStepCount < 0) {
@@ -99,22 +108,29 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     }
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
     }
-
     private fun updateStepCountDisplay() {
         stepCountTextView.text = getString(R.string.step_count, viewModel.stepCount)
 
-        val distance = stepsToKilometers(viewModel.stepCount)
+        val distance = viewModel.stepsToKilometers(viewModel.stepCount)
         distanceTextView.text = getString(R.string.distance, distance)
 
         totalStepCountTextView.text = getString(R.string.total_step_count, viewModel.totalStepCount)
 
-        val totalDistance = stepsToKilometers(viewModel.totalStepCount)
+        val totalDistance = viewModel.stepsToKilometers(viewModel.totalStepCount)
         totalDistanceTextView.text = getString(R.string.total_distance, totalDistance)
     }
+    private fun scheduleSaveDailyStepWorker() {
+        val saveDailyStepWorkRequest = PeriodicWorkRequestBuilder<SaveDailyStepWorker>(24, TimeUnit.HOURS)
+            .build()
+        WorkManager.getInstance(this).enqueue(saveDailyStepWorkRequest)
+    }
 
-
-    private fun stepsToKilometers(steps: Int): Double {
-        val stepsPerKilometer = 1250.0
-        return steps / stepsPerKilometer
+    private fun observeDailySteps() {
+        viewModel.getAllDailySteps().observe(this, Observer { dailySteps ->
+            Log.d("MainActivity", "Daily steps data:")
+            dailySteps.forEach { dailyStep ->
+                Log.d("MainActivity", "Date: ${dailyStep.date}, Steps: ${dailyStep.steps}, Distance: ${dailyStep.distance}")
+            }
+        })
     }
 }
